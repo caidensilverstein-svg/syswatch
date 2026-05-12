@@ -633,7 +633,7 @@ justify-content:space-between;align-items:center;}
 .palette-item .pi-kbd{color:var(--muted2);font-size:.65rem;}
 
 /* TABS */
-.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px;position:sticky;top:0;z-index:99;}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px;position:sticky;top:45px;z-index:98;}
 .tab-btn{background:transparent;border:none;color:var(--muted2);padding:10px 18px;font-family:'DM Mono',monospace;
 font-size:.68rem;letter-spacing:.1em;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
 .tab-btn:hover{color:var(--muted);}
@@ -709,6 +709,14 @@ padding:3px 14px;font-size:.58rem;letter-spacing:.15em;z-index:901;display:none;
   </div>
 </header>
 
+<!-- TAB BAR — immediately after header -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('overview')" id="tab-overview">OVERVIEW</button>
+  <button class="tab-btn" onclick="switchTab('intelligence')" id="tab-intelligence">INTELLIGENCE</button>
+  <button class="tab-btn" onclick="switchTab('network')" id="tab-network">NETWORK</button>
+  <button class="tab-btn" onclick="switchTab('palantir-tab')" id="tab-palantir-tab">PALANTIR</button>
+</div>
+
 <!-- PRIORITY FEED -->
 <div id="priority-feed">
   <div class="feed-label">PRIORITY ·</div>
@@ -735,14 +743,6 @@ padding:3px 14px;font-size:.58rem;letter-spacing:.15em;z-index:901;display:none;
 <div id="theta-bar" style="background:var(--surface);border-bottom:1px solid var(--border);
 padding:4px 20px;font-size:.5rem;color:var(--muted2);letter-spacing:.1em;">
   Initializing time context…
-</div>
-
-<!-- TAB BAR — sits right below narrative/theta, above all content -->
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('overview')" id="tab-overview">OVERVIEW</button>
-  <button class="tab-btn" onclick="switchTab('intelligence')" id="tab-intelligence">INTELLIGENCE</button>
-  <button class="tab-btn" onclick="switchTab('network')" id="tab-network">NETWORK</button>
-  <button class="tab-btn" onclick="switchTab('palantir-tab')" id="tab-palantir-tab">PALANTIR</button>
 </div>
 
 <!-- OVERVIEW TAB -->
