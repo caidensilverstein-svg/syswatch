@@ -1329,10 +1329,14 @@ function drawSpark(id,data,color,threshold){
 function drawScoreSpark(id,data){
   const el=document.getElementById(id);
   if(!el||!data||!data.length)return;
-  const W=el.offsetWidth||100,H=28,dpr=window.devicePixelRatio||1;
+  // Use parent width if canvas has no width yet
+  const W=el.offsetWidth||el.parentElement?.offsetWidth||120;
+  const H=28,dpr=window.devicePixelRatio||1;
   el.width=W*dpr;el.height=H*dpr;
+  el.style.width=W+'px';el.style.height=H+'px';
   const ctx=el.getContext('2d');ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
+  if(data.length<2)return;
   const pts=data.map((v,i)=>({x:i/(Math.max(data.length-1,1))*W,y:H-(v/1000)*H}));
   ctx.beginPath();
   pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
@@ -2810,14 +2814,15 @@ function renderIntelligence(sys, pal) {
 
 // ── NETWORK TAB ───────────────────────────────────────────────────────────────
 function renderNetworkTab() {
-  const local  = window._lastLocal;
-  const oracle = window._lastOracle;
-  const sys    = _sysData;
+  // Use lastData which is always current
+  const local  = lastData?.local  || window._lastLocal  || {};
+  const oracle = lastData?.oracle || window._lastOracle || {};
+  const sys    = _sysData || {};
 
   // Local connections
   const localBody = document.getElementById('net-local-body');
-  if (localBody && local?.net_connections) {
-    const conns = local.net_connections.filter(c => c.status === 'ESTABLISHED').slice(0,20);
+  if (localBody) {
+    const conns = (local.net_connections || []).filter(c => c.status === 'ESTABLISHED').slice(0,25);
     localBody.innerHTML = conns.length === 0
       ? '<tr><td colspan="3" style="color:var(--muted2);padding:8px;">No active connections</td></tr>'
       : conns.map(c => `<tr>
@@ -2829,8 +2834,8 @@ function renderNetworkTab() {
 
   // Oracle connections
   const oracleBody = document.getElementById('net-oracle-body');
-  if (oracleBody && oracle?.net_connections) {
-    const conns = oracle.net_connections.filter(c => c.status === 'ESTABLISHED').slice(0,20);
+  if (oracleBody) {
+    const conns = (oracle.net_connections || []).filter(c => c.status === 'ESTABLISHED').slice(0,25);
     oracleBody.innerHTML = conns.length === 0
       ? '<tr><td colspan="3" style="color:var(--muted2);padding:8px;">No active connections</td></tr>'
       : conns.map(c => `<tr>
@@ -2843,7 +2848,7 @@ function renderNetworkTab() {
   // SENTINEL new connections
   const sentinelEl = document.getElementById('sentinel-new-conns');
   if (sentinelEl) {
-    const newConns = sys?.new_connections || [];
+    const newConns = sys.new_connections || [];
     sentinelEl.innerHTML = newConns.length === 0
       ? '<span style="color:var(--muted2);">No new outbound connections detected</span>'
       : newConns.map(c => {
@@ -2857,14 +2862,17 @@ function renderNetworkTab() {
 
   // Stats
   const pubIp = document.getElementById('net-pub-ip');
-  if (pubIp) pubIp.textContent = sys?.public_ip || '—';
+  if (pubIp) pubIp.textContent = sys.public_ip || '—';
 
   const devCount = document.getElementById('net-device-count');
-  if (devCount) devCount.textContent = (sys?.bt_device_count || _palData?.devices?.total || '—') + ' devices';
+  if (devCount) {
+    const total = _palData?.devices?.total || sys.bt_device_count || '—';
+    devCount.textContent = total + (total !== '—' ? ' devices' : '');
+  }
 
   const btAnchors = document.getElementById('net-bt-anchors');
-  if (btAnchors && sys?.anchors) {
-    const seen = Object.values(sys.anchors).filter(a => a.seen).length;
+  if (btAnchors && sys.anchors) {
+    const seen  = Object.values(sys.anchors).filter(a => a.seen).length;
     const total = Object.keys(sys.anchors).length;
     btAnchors.textContent = `${seen}/${total} visible`;
   }
@@ -2872,13 +2880,154 @@ function renderNetworkTab() {
 
 // ── PALANTIR TAB ──────────────────────────────────────────────────────────────
 function renderPalantirTab() {
-  // Move palantir panel content into the tab
   const dest = document.getElementById('palantir-tab-content');
-  const src  = document.getElementById('palantir-body');
-  if (dest && src) {
-    dest.innerHTML = '';
-    dest.appendChild(src.cloneNode(true));
+  if (!dest) return;
+  // If we have palantir data, render it directly into the tab
+  if (!_palData || !_palData.last_updated) {
+    dest.innerHTML = '<div style="padding:24px;color:var(--muted2);font-size:.72rem;">Palantir initializing… data arrives every 30s</div>';
+    return;
   }
+  // Build full palantir content directly in the tab
+  dest.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border-bottom:1px solid var(--border);">
+      <div style="padding:16px 20px;border-right:1px solid var(--border);">
+        <div class="section-title">PRESENCE · WHO'S HOME</div>
+        <div id="pal-tab-phones"></div>
+        <div class="section-title" style="margin-top:12px;">FLOOR PLAN</div>
+        <div id="pal-tab-floorplan"></div>
+        <div class="section-title" style="margin-top:10px;">ALL DEVICES</div>
+        <div id="pal-tab-devices" style="max-height:200px;overflow-y:auto;"></div>
+      </div>
+      <div style="padding:16px 20px;border-right:1px solid var(--border);">
+        <div class="section-title">WEATHER</div>
+        <div id="pal-tab-weather" style="margin-bottom:16px;"></div>
+        <div class="section-title">MARKETS</div>
+        <div id="pal-tab-markets"></div>
+      </div>
+      <div style="padding:16px 20px;border-right:1px solid var(--border);">
+        <div class="section-title">LIVE SCORES</div>
+        <div id="pal-tab-sports" style="max-height:380px;overflow-y:auto;"></div>
+      </div>
+      <div style="padding:16px 20px;">
+        <div class="section-title">INTELLIGENCE FEED</div>
+        <div id="pal-tab-news" style="max-height:380px;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div style="padding:10px 24px;border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;">
+      <span style="font-size:.65rem;color:var(--muted2);">PUBLIC IP:</span>
+      <span style="font-size:.72rem;color:var(--teal);">${_sysData?.public_ip||'detecting…'}</span>
+      <span style="font-size:.65rem;color:var(--muted2);margin-left:auto;">
+        ${Object.values(_sysData?.anchors||{}).filter(a=>a.seen).length}/${Object.keys(_sysData?.anchors||{}).length} BT ANCHORS · ${_palData?.devices?.total||0} DEVICES
+      </span>
+    </div>
+    <div style="padding:8px 24px;display:flex;flex-wrap:wrap;gap:6px;" id="pal-tab-alerts"></div>`;
+
+  // Now populate each section using existing render functions
+  const phones  = _palData.devices?.phones || [];
+  const others  = _palData.devices?.others || [];
+
+  // Phones
+  const phonesEl = document.getElementById('pal-tab-phones');
+  if (phonesEl) phonesEl.innerHTML = phones.length === 0
+    ? '<div style="font-size:.72rem;color:var(--muted2);">No phones detected</div>'
+    : phones.map(p => {
+        const name = p.label||p.vendor||'Unknown';
+        const since = p.last_seen ? timeSince(p.last_seen) : '';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <div><span style="width:9px;height:9px;border-radius:50%;background:var(--green);display:inline-block;margin-right:8px;box-shadow:0 0 6px var(--green);"></span>
+          <span style="font-size:.78rem;">${name}</span></div>
+          <span style="font-size:.65rem;color:var(--muted2);">${p.ip} · ${since}</span>
+        </div>`;
+      }).join('');
+
+  // Devices
+  const devEl = document.getElementById('pal-tab-devices');
+  if (devEl) devEl.innerHTML = others.filter(d=>d.device_type!=='broadcast'&&d.device_type!=='router').map(d => {
+    const icon = {tv:'📺',laptop:'💻',gaming:'🎮',iot:'📡',unknown:'❓'}[d.device_type]||'📱';
+    return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:.7rem;">
+      <span>${icon} ${d.label||d.hostname||d.vendor||d.mac}</span>
+      <span style="color:var(--muted2);">${d.ip}</span>
+    </div>`;
+  }).join('') || '<div style="font-size:.7rem;color:var(--muted2);">No other devices</div>';
+
+  // Weather
+  renderWeatherInto('pal-tab-weather', _palData.weather||{});
+  renderMarketsInto('pal-tab-markets', _palData.markets||{});
+  renderSportsInto('pal-tab-sports', _palData.sports||[]);
+  renderNewsInto('pal-tab-news', _palData.news||[]);
+
+  // Alerts
+  const alertsEl = document.getElementById('pal-tab-alerts');
+  if (alertsEl) {
+    const alerts = (_palData.alerts||[]).slice(0,6);
+    alertsEl.innerHTML = alerts.length === 0
+      ? '<span style="font-size:.65rem;color:var(--muted2);">NO ALERTS</span>'
+      : alerts.map(a => {
+          const color = a.urgency>=7?'var(--red)':a.urgency>=5?'var(--amber)':'var(--muted)';
+          const ts = new Date(a.ts*1000).toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit'});
+          return `<span style="font-size:.68rem;padding:3px 10px;border:1px solid ${color};color:${color};">${a.msg} ${ts}</span>`;
+        }).join('');
+  }
+}
+
+// Helper render functions for palantir tab
+function renderWeatherInto(id, w) {
+  const el = document.getElementById(id);
+  if (!el || !w.temp_f) { if(el) el.innerHTML='<div style="color:var(--muted2);font-size:.7rem;">Loading…</div>'; return; }
+  const emoji = w.code<=1?'☀️':w.code<=3?'⛅':w.code<=48?'🌫️':w.code<=67?'🌧️':w.code<=77?'❄️':'⛈️';
+  el.innerHTML = `<div style="font-size:2rem;font-family:\'Syncopate\',sans-serif;color:var(--teal);">${w.temp_f}° ${emoji}</div>
+    <div style="font-size:.72rem;color:var(--muted);">${w.condition}</div>
+    <div style="font-size:.68rem;color:var(--muted2);">💨 ${w.wind_mph}mph · 💧${w.humidity}%</div>`;
+}
+
+function renderMarketsInto(id, markets) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const items = Object.values(markets);
+  if (items.length === 0) { el.innerHTML='<div style="color:var(--muted2);font-size:.7rem;">Loading…</div>'; return; }
+  el.innerHTML = items.map(m => {
+    const color = m.up?'var(--green)':'var(--red)';
+    const arrow = m.up?'▲':'▼';
+    const pct = (m.change_pct>=0?'+':'')+m.change_pct.toFixed(2)+'%';
+    return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.72rem;">
+      <span style="color:var(--muted);">${m.name}</span>
+      <div><span>${m.price.toLocaleString(undefined,{maximumFractionDigits:2})}</span>
+      <span style="color:${color};margin-left:8px;font-size:.65rem;">${arrow} ${pct}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderSportsInto(id, games) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (games.length === 0) { el.innerHTML='<div style="color:var(--muted2);font-size:.7rem;">No games right now</div>'; return; }
+  el.innerHTML = games.map(g => {
+    const dot = g.live
+      ? '<span style="width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block;margin-right:6px;animation:pulse .8s infinite;"></span>'
+      : '<span style="width:7px;height:7px;border-radius:50%;background:var(--muted2);display:inline-block;margin-right:6px;"></span>';
+    const score = (g.home_score!==''&&g.away_score!=='') ? `${g.away_score} – ${g.home_score}` : '';
+    return `<div style="padding:7px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;justify-content:space-between;">
+        <div>${dot}<span style="font-size:.65rem;color:var(--muted2);">${g.league}</span></div>
+        <span style="font-size:.62rem;color:${g.live?'var(--red)':'var(--muted2)'};">${g.status}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding-left:13px;font-size:.76rem;">
+        <span>${g.away} @ ${g.home}</span>
+        <span style="font-family:\'Syncopate\',sans-serif;font-size:.7rem;">${score}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderNewsInto(id, news) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (news.length === 0) { el.innerHTML='<div style="color:var(--muted2);font-size:.7rem;">Loading feed…</div>'; return; }
+  const catColor = {top:'var(--gold)',markets:'var(--green)',tech:'var(--blue)',world:'var(--purple)',business:'var(--teal)'};
+  el.innerHTML = news.map(n => `<div style="padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="window.open('${n.url}','_blank')">
+    <div style="font-size:.62rem;color:${catColor[n.source]||'var(--muted2)'};letter-spacing:.08em;">${(n.source||'').toUpperCase()}</div>
+    <div style="font-size:.72rem;color:var(--text);line-height:1.5;">${n.headline}</div>
+  </div>`).join('');
 }
 
 // Store latest state for tab access
