@@ -633,7 +633,7 @@ justify-content:space-between;align-items:center;}
 .palette-item .pi-kbd{color:var(--muted2);font-size:.65rem;}
 
 /* TABS */
-.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px;}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px;position:sticky;top:0;z-index:99;}
 .tab-btn{background:transparent;border:none;color:var(--muted2);padding:10px 18px;font-family:'DM Mono',monospace;
 font-size:.68rem;letter-spacing:.1em;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
 .tab-btn:hover{color:var(--muted);}
@@ -2203,7 +2203,8 @@ function updateDiffOverlay(local, oracle) {
     pts.forEach(p => ctx.lineTo(p.x, p.y));
     ctx.lineTo(pts[pts.length-1].x, H);
     const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0, color+'33'); g.addColorStop(1,'transparent');
+    const fillColor = color.length > 7 ? color : color+'44';
+    g.addColorStop(0, fillColor); g.addColorStop(1,'transparent');
     ctx.fillStyle = g; ctx.fill();
     // Label
     ctx.font = '9px DM Mono, monospace';
